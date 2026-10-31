@@ -93,7 +93,7 @@
 
 
 
-<div class="brand">富遊 RG</div><div class="sub">UA5856專屬選號資料庫分析系統</div><div id="buildVersion" style="margin-top:6px;font-size:11px;font-weight:800;color:#eafffb;opacity:.92">版本 2026.09.30-HK2</div>
+<div class="brand">富遊 RG</div><div class="sub">UA5856專屬選號資料庫分析系統</div><div id="buildVersion" style="margin-top:6px;font-size:11px;font-weight:800;color:#eafffb;opacity:.92">版本 2026.11.01-NOTICE1</div>
 </header>
 <section class="panel notice" id="noticePreview"><div class="title">目前公告 📣</div><div id="previewBody"></div></section>
 <section class="panel"><div class="title">選擇彩票模式</div><div class="modes" id="modes"></div></section>
@@ -101,7 +101,7 @@
 <section class="panel" id="numberPanel" style="display:none"><div class="title" id="playTitle">今彩539｜資料庫選號</div><div class="hint" id="dataDate" style="margin:-4px 0 12px;font-weight:800;color:var(--green)"></div><div class="plays" id="plays"></div><div class="hint" id="numberHint">登入成功後才會顯示目前模式的資料庫號碼。</div></section></main>
 <div class="modal" id="modal"><div class="modal-card"><button class="close" onclick="closeModal()">×</button><div class="title">目前公告 📣</div><div class="slides"><div class="slide-track" id="track"></div></div><div class="dots" id="dots"></div><button class="btn" onclick="closeModal()">我知道了</button></div></div>
 <script>
-const BUILD_VERSION='2026.09.30-HK2';
+const BUILD_VERSION='2026.11.01-NOTICE1';
 
 // 強制清除舊 PWA 快取／舊 Service Worker。
 // 只在這個版本第一次開啟時執行一次。
@@ -224,18 +224,41 @@ track.addEventListener('pointerup',e=>swipeEnd(e.clientX));
 function openModal(){slide=0;moveSlide();modal.classList.remove('hide')}
 function closeModal(){modal.classList.add('hide')}
 
+async function loadAnnouncements(){
+ try{
+   const response=await fetch(API_URL+'?action=announcements&t='+Date.now(),{cache:'no-store'});
+   if(!response.ok) throw new Error('公告 API HTTP '+response.status);
+   const payload=await response.json();
+   if(!payload.success || !Array.isArray(payload.announcements)) throw new Error(payload.message||'公告資料格式錯誤');
+   demo.announcements=payload.announcements.filter(a=>{
+     const enabled=String(a.enabled===undefined?'TRUE':a.enabled).trim().toUpperCase();
+     return enabled==='TRUE'||enabled==='1'||enabled==='YES';
+   }).map(a=>({
+     enabled:true,
+     title:String(a.title||''),
+     content:String(a.content||''),
+     image:normalizeImageUrl(a.image||'')
+   }));
+   render();
+   if(currentAnnouncements.length) openModal();
+ }catch(err){
+   console.error('公告更新失敗',err);
+   // 不使用過期的內建示範公告冒充最新公告。
+   demo.announcements=[];
+   render();
+   document.getElementById('previewBody').innerHTML='<div class="empty">公告暫時無法載入，請稍後重新整理</div>';
+ }
+}
+
 async function loadRemoteData(){
  try{
    const r=await fetch(API_URL+'?action=data&t='+Date.now(),{cache:'no-store'});
    const data=await r.json();
    if(!data.success) throw new Error(data.message||'讀取失敗');
 
-   demo.announcements=(data.announcements||[]).map(a=>({
-     enabled:true,
-     title:a.title||'',
-     content:a.content||'',
-     image:normalizeImageUrl(a.image||'')
-   }));
+   // 公告由專用 API 獨立載入，不依賴選號 action=data 的回傳欄位。
+   // 選號與登入流程維持原樣。
+
 
    // 只取「今天」的資料，避免顯示前一天或其他日期的號碼。
    // 使用裝置本地日期（台灣使用者手機/電腦會得到台灣日期）。
@@ -294,12 +317,13 @@ async function demoLogin(){
 // 先畫出介面，再抓 Google 試算表最新資料
 render();
 loadRemoteData();
+loadAnnouncements();
 
 </script>
 <script>
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('./sw.js?v=20260930-pwa1')
+    navigator.serviceWorker.register('./sw.js?v=20261101-notice1')
       .then(reg => reg.update())
       .catch(err => console.warn('PWA service worker:', err));
   }
